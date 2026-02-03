@@ -1,5 +1,47 @@
 <p align="center"><img src="https://user-images.githubusercontent.com/661798/36482670-f81601c0-170b-11e8-8adb-2365b346ac27.png" /></p>
 
+> **🔀 This is a modified fork of [RenderDoc](https://github.com/baldurk/renderdoc)**
+>
+> This fork adds the **Draw Call Visibility Toggle** feature, allowing users to enable/disable specific draw calls in the Event Browser to observe their impact on rendering results.
+>
+> 📦 Original repository: https://github.com/baldurk/renderdoc
+
+---
+
+## ✨ New Feature: Draw Call Visibility Toggle
+
+This fork introduces the ability to toggle visibility of individual draw calls directly from the Event Browser.
+
+### Features
+
+- **Eye Icon Column**: A new visibility column with eye icons in the Event Browser
+- **Toggle Draw Calls**: Click the eye icon to disable/enable individual draw calls
+- **Real-time Preview**: Changes are immediately reflected in the texture viewer
+- **Skip State Option**: Optional configuration (`EventBrowser_SkipStateOnDisabledDraw`) to also skip state setup (pipeline bindings, etc.) when a draw call is disabled
+
+### Supported APIs
+
+| API     | Status             |
+| ------- | ------------------ |
+| D3D12   | :heavy_check_mark: |
+| D3D11   | :heavy_check_mark: |
+| Vulkan  | :heavy_check_mark: |
+| OpenGL  | :heavy_check_mark: |
+
+### Usage
+
+1. Open a capture in RenderDoc
+2. Navigate to the Event Browser
+3. Look for the eye icon column on the left side of each draw call
+4. Click the eye icon to toggle visibility of that draw call
+5. The texture viewer will update to show the result without the disabled draw call(s)
+
+This feature is useful for debugging rendering issues by isolating specific draw calls to understand their contribution to the final image.
+
+---
+
+## About RenderDoc
+
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 [![CI](https://github.com/baldurk/renderdoc/workflows/CI/badge.svg?branch=v1.x&event=push)](https://github.com/baldurk/renderdoc/actions)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](docs/CODE_OF_CONDUCT.md) 
@@ -67,39 +109,7 @@ Compiling
 
 Building RenderDoc is fairly straight forward on most platforms. See [Compiling.md](docs/CONTRIBUTING/Compiling.md) for more details.
 
-New Feature: Draw Call Visibility Toggle
---------------
-
-This fork adds a **Draw Call Visibility Toggle** feature that allows users to enable/disable specific draw calls in the Event Browser to observe their impact on rendering results.
-
-### Features
-
-- **Eye Icon Column**: A new visibility column with eye icons in the Event Browser
-- **Toggle Draw Calls**: Click the eye icon to disable/enable individual draw calls
-- **Real-time Preview**: Changes are immediately reflected in the texture viewer
-- **Skip State Option**: Optional configuration (`EventBrowser_SkipStateOnDisabledDraw`) to also skip state setup (pipeline bindings, etc.) when a draw call is disabled
-
-### Supported APIs
-
-| API     | Status             |
-| ------- | ------------------ |
-| D3D12   | :heavy_check_mark: |
-| D3D11   | :heavy_check_mark: |
-| Vulkan  | :heavy_check_mark: |
-| OpenGL  | :heavy_check_mark: |
-
-### Usage
-
-1. Open a capture in RenderDoc
-2. Navigate to the Event Browser
-3. Look for the eye icon column on the left side of each draw call
-4. Click the eye icon to toggle visibility of that draw call
-5. The texture viewer will update to show the result without the disabled draw call(s)
-
-This feature is useful for debugging rendering issues by isolating specific draw calls to understand their contribution to the final image.
-
 Contributing & Development
 --------------
 
 I've added some notes on how to contribute, as well as where to get started looking through the code in [Developing-Change.md](docs/CONTRIBUTING/Developing-Change.md). All contribution information is available under [CONTRIBUTING.md](docs/CONTRIBUTING.md).
-
