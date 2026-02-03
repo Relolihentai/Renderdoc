@@ -27,6 +27,7 @@
 #include <float.h>
 #include <math.h>
 #include <algorithm>
+#include <set>
 #include "core/settings.h"
 #include "data/glsl_shaders.h"
 #include "driver/ihv/amd/amd_rgp.h"
@@ -210,6 +211,14 @@ void VulkanReplay::ReplayLog(uint32_t endEventID, ReplayLogType replayType)
       return;
   }
   m_pDriver->ReplayLog(0, endEventID, replayType);
+}
+
+void VulkanReplay::SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState)
+{
+  std::set<uint32_t> disabledDraws;
+  for(uint32_t eid : disabledEventIds)
+    disabledDraws.insert(eid);
+  m_pDriver->SetDisabledDraws(disabledDraws, skipState);
 }
 
 SDFile *VulkanReplay::GetStructuredFile()

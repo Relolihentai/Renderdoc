@@ -130,6 +130,14 @@ void GLReplay::ReplayLog(uint32_t endEventID, ReplayLogType replayType)
   }
 }
 
+void GLReplay::SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState)
+{
+  std::set<uint32_t> disabledDraws;
+  for(uint32_t eid : disabledEventIds)
+    disabledDraws.insert(eid);
+  m_pDriver->SetDisabledDraws(disabledDraws, skipState);
+}
+
 SDFile *GLReplay::GetStructuredFile()
 {
   return m_pDriver->GetStructuredFile();

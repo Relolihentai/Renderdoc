@@ -239,6 +239,8 @@ public:
   void ReplayLoop(WindowingData window, ResourceId texid);
   void CancelReplayLoop();
 
+  void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState);
+
   rdcstr CreateRGPProfile(WindowingData window);
 
   ReplayOutput *CreateOutput(WindowingData window, ReplayOutputType type);
@@ -296,6 +298,9 @@ private:
 
   std::set<ResourceId> m_TargetResources;
   std::set<ResourceId> m_CustomShaders;
+
+  rdcarray<uint32_t> m_DisabledDraws;
+  bool m_SkipStateOnDisabledDraw = false;
 
   friend struct ReplayOutput;
 };

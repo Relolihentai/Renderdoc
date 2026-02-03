@@ -419,6 +419,10 @@ private:
   VulkanActionCallback *m_ActionCallback;
   void *m_SubmitChain;
 
+  // Disabled draw calls - events that should be skipped during replay
+  std::set<uint32_t> m_DisabledDraws;
+  bool m_SkipStateOnDisabledDraw = false;
+
   uint64_t m_TimeBase = 0;
   double m_TimeFrequency = 1.0f;
   SDFile *m_StructuredFile;
@@ -997,6 +1001,15 @@ private:
 
   bool InRerecordRange(ResourceId cmdid);
   bool HasRerecordCmdBuf(ResourceId cmdid);
+  bool IsDrawDisabled(uint32_t eventId) const
+  {
+    return m_DisabledDraws.find(eventId) != m_DisabledDraws.end();
+  }
+  void SetDisabledDraws(const std::set<uint32_t> &disabledDraws, bool skipState)
+  {
+    m_DisabledDraws = disabledDraws;
+    m_SkipStateOnDisabledDraw = skipState;
+  }
   bool IsRenderpassOpen(ResourceId cmdid);
   VkCommandBuffer RerecordCmdBuf(ResourceId cmdid);
 

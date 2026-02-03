@@ -244,6 +244,8 @@ public:
   virtual void FileChanged() = 0;
   virtual RDResult FatalErrorCheck() = 0;
 
+  virtual void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState) = 0;
+
   virtual bool NeedRemapForFetch(const ResourceFormat &format) = 0;
 
   virtual DriverInformation GetDriverInfo() = 0;

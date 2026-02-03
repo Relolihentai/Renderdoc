@@ -474,6 +474,14 @@ function must be called from another thread.
   DOCUMENT("Notify the interface that the file it has open has been changed on disk.");
   virtual void FileChanged() = 0;
 
+  DOCUMENT(R"(Set the list of draw calls that should be disabled (skipped) during replay.
+
+:param List[int] disabledEventIds: The list of event IDs to disable.
+:param bool skipState: If ``True``, also skip state setup for disabled draws (pipeline bindings, etc).
+  When ``False``, only the actual draw command is skipped.
+)");
+  virtual void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState) = 0;
+
   DOCUMENT(R"(Move the replay to reflect the state immediately *after* the given
 :data:`eventId <APIEvent.eventId>`.
 

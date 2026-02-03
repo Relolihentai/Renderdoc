@@ -3849,8 +3849,12 @@ bool WrappedID3D11DeviceContext::Serialise_DrawIndexedInstanced(
 
   if(IsReplayingAndReading())
   {
-    m_pRealContext->DrawIndexedInstanced(IndexCountPerInstance, InstanceCount, StartIndexLocation,
-                                         BaseVertexLocation, StartInstanceLocation);
+    // Check if this draw call is disabled
+    if(!IsDrawDisabled(m_CurEventID))
+    {
+      m_pRealContext->DrawIndexedInstanced(IndexCountPerInstance, InstanceCount, StartIndexLocation,
+                                           BaseVertexLocation, StartInstanceLocation);
+    }
 
     LatchSOProperties();
 
@@ -3926,8 +3930,12 @@ bool WrappedID3D11DeviceContext::Serialise_DrawInstanced(SerialiserType &ser,
 
   if(IsReplayingAndReading())
   {
-    m_pRealContext->DrawInstanced(VertexCountPerInstance, InstanceCount, StartVertexLocation,
-                                  StartInstanceLocation);
+    // Check if this draw call is disabled
+    if(!IsDrawDisabled(m_CurEventID))
+    {
+      m_pRealContext->DrawInstanced(VertexCountPerInstance, InstanceCount, StartVertexLocation,
+                                    StartInstanceLocation);
+    }
 
     LatchSOProperties();
 
@@ -3998,7 +4006,11 @@ bool WrappedID3D11DeviceContext::Serialise_DrawIndexed(SerialiserType &ser, UINT
 
   if(IsReplayingAndReading())
   {
-    m_pRealContext->DrawIndexed(IndexCount, StartIndexLocation, BaseVertexLocation);
+    // Check if this draw call is disabled
+    if(!IsDrawDisabled(m_CurEventID))
+    {
+      m_pRealContext->DrawIndexed(IndexCount, StartIndexLocation, BaseVertexLocation);
+    }
 
     LatchSOProperties();
 
@@ -4064,7 +4076,11 @@ bool WrappedID3D11DeviceContext::Serialise_Draw(SerialiserType &ser, UINT Vertex
 
   if(IsReplayingAndReading())
   {
-    m_pRealContext->Draw(VertexCount, StartVertexLocation);
+    // Check if this draw call is disabled
+    if(!IsDrawDisabled(m_CurEventID))
+    {
+      m_pRealContext->Draw(VertexCount, StartVertexLocation);
+    }
 
     LatchSOProperties();
 
@@ -4126,6 +4142,9 @@ bool WrappedID3D11DeviceContext::Serialise_DrawAuto(SerialiserType &ser)
 
   if(IsReplayingAndReading())
   {
+    // Check if this draw call is disabled
+    bool drawDisabled = IsDrawDisabled(m_CurEventID);
+
     // spec says that only the first vertex buffer is used
     if(m_CurrentPipelineState->IA.VBs[0] == NULL)
     {
@@ -4177,7 +4196,8 @@ bool WrappedID3D11DeviceContext::Serialise_DrawAuto(SerialiserType &ser)
             numVertsToDraw = numPrims.NumPrimitivesWritten * 3;
         }
 
-        m_pRealContext->DrawAuto();
+        if(!drawDisabled)
+          m_pRealContext->DrawAuto();
       }
       else
       {
@@ -4210,7 +4230,8 @@ bool WrappedID3D11DeviceContext::Serialise_DrawAuto(SerialiserType &ser)
             numVertsToDraw = data.numPrims * 3;
         }
 
-        m_pRealContext->Draw((UINT)numVertsToDraw, 0);
+        if(!drawDisabled)
+          m_pRealContext->Draw((UINT)numVertsToDraw, 0);
       }
     }
 
@@ -4276,7 +4297,8 @@ bool WrappedID3D11DeviceContext::Serialise_DrawIndexedInstancedIndirect(Serialis
 
   if(IsReplayingAndReading())
   {
-    if(pBufferForArgs)
+    // Check if this draw call is disabled
+    if(pBufferForArgs && !IsDrawDisabled(m_CurEventID))
     {
       m_pRealContext->DrawIndexedInstancedIndirect(UNWRAP(WrappedID3D11Buffer, pBufferForArgs),
                                                    AlignedByteOffsetForArgs);
@@ -4411,7 +4433,8 @@ bool WrappedID3D11DeviceContext::Serialise_DrawInstancedIndirect(SerialiserType 
 
   if(IsReplayingAndReading())
   {
-    if(pBufferForArgs)
+    // Check if this draw call is disabled
+    if(pBufferForArgs && !IsDrawDisabled(m_CurEventID))
     {
       m_pRealContext->DrawInstancedIndirect(UNWRAP(WrappedID3D11Buffer, pBufferForArgs),
                                             AlignedByteOffsetForArgs);
@@ -5043,7 +5066,11 @@ bool WrappedID3D11DeviceContext::Serialise_Dispatch(SerialiserType &ser, UINT Th
 
   if(IsReplayingAndReading())
   {
-    m_pRealContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+    // Check if this dispatch is disabled
+    if(!IsDrawDisabled(m_CurEventID))
+    {
+      m_pRealContext->Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+    }
 
     if(IsLoading(m_State))
     {
@@ -5123,7 +5150,8 @@ bool WrappedID3D11DeviceContext::Serialise_DispatchIndirect(SerialiserType &ser,
 
   if(IsReplayingAndReading())
   {
-    if(pBufferForArgs)
+    // Check if this dispatch is disabled
+    if(pBufferForArgs && !IsDrawDisabled(m_CurEventID))
     {
       m_pRealContext->DispatchIndirect(UNWRAP(WrappedID3D11Buffer, pBufferForArgs),
                                        AlignedByteOffsetForArgs);

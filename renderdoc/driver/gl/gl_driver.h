@@ -601,6 +601,10 @@ private:
 
   std::set<uint32_t> m_UnsafeDraws;
 
+  // Disabled draw calls - events that should be skipped during replay
+  std::set<uint32_t> m_DisabledDraws;
+  bool m_SkipStateOnDisabledDraw = false;
+
   // final check function to ensure we don't try and render with no index or vertex buffer bound, as
   // many drivers will still try to access memory via legacy behaviour even on core profile.
   bool Check_SafeDraw(bool indexed);
@@ -668,6 +672,15 @@ public:
   void RegisterDebugCallback();
 
   bool IsUnsafeDraw(uint32_t eventId) { return m_UnsafeDraws.find(eventId) != m_UnsafeDraws.end(); }
+  bool IsDrawDisabled(uint32_t eventId) const
+  {
+    return m_DisabledDraws.find(eventId) != m_DisabledDraws.end();
+  }
+  void SetDisabledDraws(const std::set<uint32_t> &disabledDraws, bool skipState)
+  {
+    m_DisabledDraws = disabledDraws;
+    m_SkipStateOnDisabledDraw = skipState;
+  }
   // replay interface
   void Initialise(GLInitParams &params, uint64_t sectionVersion, const ReplayOptions &opts);
   void ReplayLog(uint32_t startEventID, uint32_t endEventID, ReplayLogType replayType);

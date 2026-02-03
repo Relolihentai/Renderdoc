@@ -1709,6 +1709,14 @@ void D3D11Replay::ReplayLog(uint32_t endEventID, ReplayLogType replayType)
   }
 }
 
+void D3D11Replay::SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState)
+{
+  std::set<uint32_t> disabledDraws;
+  for(uint32_t eid : disabledEventIds)
+    disabledDraws.insert(eid);
+  m_pImmediateContext->SetDisabledDrawCalls(disabledDraws, skipState);
+}
+
 SDFile *D3D11Replay::GetStructuredFile()
 {
   return m_pDevice->GetStructuredFile();

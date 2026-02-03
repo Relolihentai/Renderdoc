@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <set>
 #include "common/common.h"
 #include "d3d12_common.h"
 #include "d3d12_device.h"
@@ -244,6 +245,15 @@ struct D3D12CommandData
   WrappedID3D12Device *m_pDevice;
 
   D3D12ActionCallback *m_ActionCallback;
+
+  // Disabled draw calls - events that should be skipped during replay
+  std::set<uint32_t> m_DisabledDraws;
+  bool m_SkipStateOnDisabledDraw = false;
+
+  bool IsDrawDisabled(uint32_t eventId) const
+  {
+    return m_DisabledDraws.find(eventId) != m_DisabledDraws.end();
+  }
 
   ResourceId m_LastCmdListID;
 

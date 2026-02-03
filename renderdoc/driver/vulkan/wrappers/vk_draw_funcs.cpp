@@ -189,15 +189,19 @@ bool WrappedVulkan::Serialise_vkCmdDraw(SerialiserType &ser, VkCommandBuffer com
 
         uint32_t eventId = HandlePreCallback(commandBuffer);
 
-        ObjDisp(commandBuffer)
-            ->CmdDraw(Unwrap(commandBuffer), vertexCount, instanceCount, firstVertex, firstInstance);
-
-        if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+        // Check if this draw call is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)
-              ->CmdDraw(Unwrap(commandBuffer), vertexCount, instanceCount, firstVertex,
-                        firstInstance);
-          m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+              ->CmdDraw(Unwrap(commandBuffer), vertexCount, instanceCount, firstVertex, firstInstance);
+
+          if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+          {
+            ObjDisp(commandBuffer)
+                ->CmdDraw(Unwrap(commandBuffer), vertexCount, instanceCount, firstVertex,
+                          firstInstance);
+            m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+          }
         }
       }
     }
@@ -278,16 +282,20 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndexed(SerialiserType &ser, VkCommandBuf
 
         uint32_t eventId = HandlePreCallback(commandBuffer);
 
-        ObjDisp(commandBuffer)
-            ->CmdDrawIndexed(Unwrap(commandBuffer), indexCount, instanceCount, firstIndex,
-                             vertexOffset, firstInstance);
-
-        if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+        // Check if this draw call is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)
               ->CmdDrawIndexed(Unwrap(commandBuffer), indexCount, instanceCount, firstIndex,
                                vertexOffset, firstInstance);
-          m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+
+          if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+          {
+            ObjDisp(commandBuffer)
+                ->CmdDrawIndexed(Unwrap(commandBuffer), indexCount, instanceCount, firstIndex,
+                                 vertexOffset, firstInstance);
+            m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+          }
         }
       }
     }
@@ -379,14 +387,18 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndirect(SerialiserType &ser, VkCommandBu
 
           uint32_t eventId = HandlePreCallback(commandBuffer);
 
-          ObjDisp(commandBuffer)
-              ->CmdDrawIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, count, stride);
-
-          if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+          // Check if this draw call is disabled
+          if(!IsDrawDisabled(eventId))
           {
             ObjDisp(commandBuffer)
                 ->CmdDrawIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, count, stride);
-            m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+
+            if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+            {
+              ObjDisp(commandBuffer)
+                  ->CmdDrawIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, count, stride);
+              m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+            }
           }
         }
       }
@@ -453,18 +465,22 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndirect(SerialiserType &ser, VkCommandBu
               {
                 uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::Drawcall, i + 1);
 
-                // action up to and including i. The previous draws will be nop'd out
-                ObjDisp(commandBuffer)
-                    ->CmdDrawIndirect(Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0,
-                                      i + 1, stride);
-
-                if(eventId &&
-                   m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+                // Check if this draw call is disabled
+                if(!IsDrawDisabled(eventId))
                 {
+                  // action up to and including i. The previous draws will be nop'd out
                   ObjDisp(commandBuffer)
-                      ->CmdDrawIndirect(Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(),
-                                        0, i + 1, stride);
-                  m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+                      ->CmdDrawIndirect(Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0,
+                                        i + 1, stride);
+
+                  if(eventId &&
+                     m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+                  {
+                    ObjDisp(commandBuffer)
+                        ->CmdDrawIndirect(Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(),
+                                          0, i + 1, stride);
+                    m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+                  }
                 }
 
                 // now that we're done, nop out this draw so that the next time around we only draw
@@ -788,15 +804,19 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndexedIndirect(SerialiserType &ser,
 
           uint32_t eventId = HandlePreCallback(commandBuffer);
 
-          ObjDisp(commandBuffer)
-              ->CmdDrawIndexedIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, count, stride);
-
-          if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+          // Check if this draw call is disabled
+          if(!IsDrawDisabled(eventId))
           {
             ObjDisp(commandBuffer)
-                ->CmdDrawIndexedIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, count,
-                                         stride);
-            m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+                ->CmdDrawIndexedIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, count, stride);
+
+            if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+            {
+              ObjDisp(commandBuffer)
+                  ->CmdDrawIndexedIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, count,
+                                           stride);
+              m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+            }
           }
         }
       }
@@ -834,17 +854,21 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndexedIndirect(SerialiserType &ser,
               {
                 uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::Drawcall, i + 1);
 
-                ObjDisp(commandBuffer)
-                    ->CmdDrawIndexedIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, 1,
-                                             stride);
-
-                if(eventId &&
-                   m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+                // Check if this draw call is disabled
+                if(!IsDrawDisabled(eventId))
                 {
                   ObjDisp(commandBuffer)
                       ->CmdDrawIndexedIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, 1,
                                                stride);
-                  m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+
+                  if(eventId &&
+                     m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+                  {
+                    ObjDisp(commandBuffer)
+                        ->CmdDrawIndexedIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset, 1,
+                                                 stride);
+                    m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+                  }
                 }
 
                 offset += stride;
@@ -1155,12 +1179,16 @@ bool WrappedVulkan::Serialise_vkCmdDispatch(SerialiserType &ser, VkCommandBuffer
 
         uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::Dispatch);
 
-        ObjDisp(commandBuffer)->CmdDispatch(Unwrap(commandBuffer), x, y, z);
-
-        if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::Dispatch, commandBuffer))
+        // Check if this dispatch is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)->CmdDispatch(Unwrap(commandBuffer), x, y, z);
-          m_ActionCallback->PostRedispatch(eventId, ActionFlags::Dispatch, commandBuffer);
+
+          if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::Dispatch, commandBuffer))
+          {
+            ObjDisp(commandBuffer)->CmdDispatch(Unwrap(commandBuffer), x, y, z);
+            m_ActionCallback->PostRedispatch(eventId, ActionFlags::Dispatch, commandBuffer);
+          }
         }
       }
     }
@@ -1231,12 +1259,16 @@ bool WrappedVulkan::Serialise_vkCmdDispatchIndirect(SerialiserType &ser,
 
         uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::Dispatch);
 
-        ObjDisp(commandBuffer)->CmdDispatchIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset);
-
-        if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::Dispatch, commandBuffer))
+        // Check if this dispatch is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)->CmdDispatchIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset);
-          m_ActionCallback->PostRedispatch(eventId, ActionFlags::Dispatch, commandBuffer);
+
+          if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::Dispatch, commandBuffer))
+          {
+            ObjDisp(commandBuffer)->CmdDispatchIndirect(Unwrap(commandBuffer), Unwrap(buffer), offset);
+            m_ActionCallback->PostRedispatch(eventId, ActionFlags::Dispatch, commandBuffer);
+          }
         }
       }
     }
@@ -2671,16 +2703,20 @@ bool WrappedVulkan::Serialise_vkCmdDispatchBase(SerialiserType &ser, VkCommandBu
 
         uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::Dispatch);
 
-        ObjDisp(commandBuffer)
-            ->CmdDispatchBase(Unwrap(commandBuffer), baseGroupX, baseGroupY, baseGroupZ,
-                              groupCountX, groupCountY, groupCountZ);
-
-        if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::Dispatch, commandBuffer))
+        // Check if this dispatch is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)
               ->CmdDispatchBase(Unwrap(commandBuffer), baseGroupX, baseGroupY, baseGroupZ,
                                 groupCountX, groupCountY, groupCountZ);
-          m_ActionCallback->PostRedispatch(eventId, ActionFlags::Dispatch, commandBuffer);
+
+          if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::Dispatch, commandBuffer))
+          {
+            ObjDisp(commandBuffer)
+                ->CmdDispatchBase(Unwrap(commandBuffer), baseGroupX, baseGroupY, baseGroupZ,
+                                  groupCountX, groupCountY, groupCountZ);
+            m_ActionCallback->PostRedispatch(eventId, ActionFlags::Dispatch, commandBuffer);
+          }
         }
       }
     }
@@ -2838,17 +2874,21 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndirectCount(SerialiserType &ser,
             {
               uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::Drawcall, i + 1);
 
-              // action up to and including i. The previous draws will be nop'd out
-              ObjDisp(commandBuffer)
-                  ->CmdDrawIndirect(Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0,
-                                    i + 1, stride);
-
-              if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+              // Check if this draw call is disabled
+              if(!IsDrawDisabled(eventId))
               {
+                // action up to and including i. The previous draws will be nop'd out
                 ObjDisp(commandBuffer)
                     ->CmdDrawIndirect(Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0,
                                       i + 1, stride);
-                m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+
+                if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+                {
+                  ObjDisp(commandBuffer)
+                      ->CmdDrawIndirect(Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0,
+                                        i + 1, stride);
+                  m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+                }
               }
 
               // now that we're done, nop out this draw so that the next time around we only draw
@@ -3187,17 +3227,21 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndexedIndirectCount(
             {
               uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::Drawcall, i + 1);
 
-              // action up to and including i. The previous draws will be nop'd out
-              ObjDisp(commandBuffer)
-                  ->CmdDrawIndexedIndirect(Unwrap(commandBuffer),
-                                           m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
-
-              if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+              // Check if this draw call is disabled
+              if(!IsDrawDisabled(eventId))
               {
+                // action up to and including i. The previous draws will be nop'd out
                 ObjDisp(commandBuffer)
                     ->CmdDrawIndexedIndirect(Unwrap(commandBuffer),
                                              m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
-                m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+
+                if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+                {
+                  ObjDisp(commandBuffer)
+                      ->CmdDrawIndexedIndirect(Unwrap(commandBuffer),
+                                               m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
+                  m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+                }
               }
 
               // now that we're done, nop out this draw so that the next time around we only draw
@@ -3469,18 +3513,22 @@ bool WrappedVulkan::Serialise_vkCmdDrawIndirectByteCountEXT(
 
         uint32_t eventId = HandlePreCallback(commandBuffer);
 
-        ObjDisp(commandBuffer)
-            ->CmdDrawIndirectByteCountEXT(Unwrap(commandBuffer), instanceCount, firstInstance,
-                                          Unwrap(counterBuffer), counterBufferOffset, counterOffset,
-                                          vertexStride);
-
-        if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+        // Check if this draw call is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)
               ->CmdDrawIndirectByteCountEXT(Unwrap(commandBuffer), instanceCount, firstInstance,
-                                            Unwrap(counterBuffer), counterBufferOffset,
-                                            counterOffset, vertexStride);
-          m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+                                            Unwrap(counterBuffer), counterBufferOffset, counterOffset,
+                                            vertexStride);
+
+          if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::Drawcall, commandBuffer))
+          {
+            ObjDisp(commandBuffer)
+                ->CmdDrawIndirectByteCountEXT(Unwrap(commandBuffer), instanceCount, firstInstance,
+                                              Unwrap(counterBuffer), counterBufferOffset,
+                                              counterOffset, vertexStride);
+            m_ActionCallback->PostRedraw(eventId, ActionFlags::Drawcall, commandBuffer);
+          }
         }
       }
     }
@@ -4372,14 +4420,18 @@ bool WrappedVulkan::Serialise_vkCmdDrawMeshTasksEXT(SerialiserType &ser,
 
         uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::MeshDispatch);
 
-        ObjDisp(commandBuffer)
-            ->CmdDrawMeshTasksEXT(Unwrap(commandBuffer), groupCountX, groupCountY, groupCountZ);
-
-        if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+        // Check if this mesh dispatch is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)
               ->CmdDrawMeshTasksEXT(Unwrap(commandBuffer), groupCountX, groupCountY, groupCountZ);
-          m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+
+          if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+          {
+            ObjDisp(commandBuffer)
+                ->CmdDrawMeshTasksEXT(Unwrap(commandBuffer), groupCountX, groupCountY, groupCountZ);
+            m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+          }
         }
       }
     }
@@ -4468,16 +4520,20 @@ bool WrappedVulkan::Serialise_vkCmdDrawMeshTasksIndirectEXT(SerialiserType &ser,
 
           uint32_t eventId = HandlePreCallback(commandBuffer);
 
-          ObjDisp(commandBuffer)
-              ->CmdDrawMeshTasksIndirectEXT(Unwrap(commandBuffer), Unwrap(buffer), offset,
-                                            drawCount, stride);
-
-          if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+          // Check if this mesh draw is disabled
+          if(!IsDrawDisabled(eventId))
           {
             ObjDisp(commandBuffer)
                 ->CmdDrawMeshTasksIndirectEXT(Unwrap(commandBuffer), Unwrap(buffer), offset,
                                               drawCount, stride);
-            m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+
+            if(eventId && m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+            {
+              ObjDisp(commandBuffer)
+                  ->CmdDrawMeshTasksIndirectEXT(Unwrap(commandBuffer), Unwrap(buffer), offset,
+                                                drawCount, stride);
+              m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+            }
           }
         }
       }
@@ -4546,19 +4602,23 @@ bool WrappedVulkan::Serialise_vkCmdDrawMeshTasksIndirectEXT(SerialiserType &ser,
               {
                 uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::MeshDispatch, i + 1);
 
-                // action up to and including i. The previous draws will be nop'd out
-                ObjDisp(commandBuffer)
-                    ->CmdDrawMeshTasksIndirectEXT(
-                        Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
-
-                if(eventId &&
-                   m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+                // Check if this mesh dispatch is disabled
+                if(!IsDrawDisabled(eventId))
                 {
+                  // action up to and including i. The previous draws will be nop'd out
                   ObjDisp(commandBuffer)
-                      ->CmdDrawMeshTasksIndirectEXT(Unwrap(commandBuffer),
-                                                    m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1,
-                                                    stride);
-                  m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+                      ->CmdDrawMeshTasksIndirectEXT(
+                          Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
+
+                  if(eventId &&
+                     m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+                  {
+                    ObjDisp(commandBuffer)
+                        ->CmdDrawMeshTasksIndirectEXT(Unwrap(commandBuffer),
+                                                      m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1,
+                                                      stride);
+                    m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+                  }
                 }
 
                 // now that we're done, nop out this draw so that the next time around we only draw
@@ -4955,18 +5015,22 @@ bool WrappedVulkan::Serialise_vkCmdDrawMeshTasksIndirectCountEXT(
             {
               uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::MeshDispatch, i + 1);
 
-              // action up to and including i. The previous draws will be nop'd out
-              ObjDisp(commandBuffer)
-                  ->CmdDrawMeshTasksIndirectEXT(
-                      Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
-
-              if(eventId &&
-                 m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+              // Check if this mesh dispatch is disabled
+              if(!IsDrawDisabled(eventId))
               {
+                // action up to and including i. The previous draws will be nop'd out
                 ObjDisp(commandBuffer)
                     ->CmdDrawMeshTasksIndirectEXT(
                         Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
-                m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+
+                if(eventId &&
+                   m_ActionCallback->PostDraw(eventId, ActionFlags::MeshDispatch, commandBuffer))
+                {
+                  ObjDisp(commandBuffer)
+                      ->CmdDrawMeshTasksIndirectEXT(
+                          Unwrap(commandBuffer), m_IndirectBuffer.UnwrappedBuffer(), 0, i + 1, stride);
+                  m_ActionCallback->PostRedraw(eventId, ActionFlags::MeshDispatch, commandBuffer);
+                }
               }
 
               // now that we're done, nop out this draw so that the next time around we only draw
@@ -5254,19 +5318,23 @@ bool WrappedVulkan::Serialise_vkCmdTraceRaysKHR(
 
         uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::DispatchRay);
 
-        ObjDisp(commandBuffer)
-            ->CmdTraceRaysKHR(Unwrap(commandBuffer), &RaygenShaderBindingTable,
-                              &MissShaderBindingTable, &HitShaderBindingTable,
-                              &CallableShaderBindingTable, width, height, depth);
-
-        if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::DispatchRay, commandBuffer))
+        // Check if this ray trace is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)
               ->CmdTraceRaysKHR(Unwrap(commandBuffer), &RaygenShaderBindingTable,
                                 &MissShaderBindingTable, &HitShaderBindingTable,
                                 &CallableShaderBindingTable, width, height, depth);
 
-          m_ActionCallback->PostRemisc(eventId, ActionFlags::Clear, commandBuffer);
+          if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::DispatchRay, commandBuffer))
+          {
+            ObjDisp(commandBuffer)
+                ->CmdTraceRaysKHR(Unwrap(commandBuffer), &RaygenShaderBindingTable,
+                                  &MissShaderBindingTable, &HitShaderBindingTable,
+                                  &CallableShaderBindingTable, width, height, depth);
+
+            m_ActionCallback->PostRemisc(eventId, ActionFlags::Clear, commandBuffer);
+          }
         }
       }
     }
@@ -5358,19 +5426,23 @@ bool WrappedVulkan::Serialise_vkCmdTraceRaysIndirectKHR(
 
         uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::DispatchRay);
 
-        ObjDisp(commandBuffer)
-            ->CmdTraceRaysIndirectKHR(Unwrap(commandBuffer), &RaygenShaderBindingTable,
-                                      &MissShaderBindingTable, &HitShaderBindingTable,
-                                      &CallableShaderBindingTable, indirectDeviceAddress);
-
-        if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::DispatchRay, commandBuffer))
+        // Check if this ray trace is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)
               ->CmdTraceRaysIndirectKHR(Unwrap(commandBuffer), &RaygenShaderBindingTable,
                                         &MissShaderBindingTable, &HitShaderBindingTable,
                                         &CallableShaderBindingTable, indirectDeviceAddress);
 
-          m_ActionCallback->PostRemisc(eventId, ActionFlags::Clear, commandBuffer);
+          if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::DispatchRay, commandBuffer))
+          {
+            ObjDisp(commandBuffer)
+                ->CmdTraceRaysIndirectKHR(Unwrap(commandBuffer), &RaygenShaderBindingTable,
+                                          &MissShaderBindingTable, &HitShaderBindingTable,
+                                          &CallableShaderBindingTable, indirectDeviceAddress);
+
+            m_ActionCallback->PostRemisc(eventId, ActionFlags::Clear, commandBuffer);
+          }
         }
       }
     }
@@ -5452,13 +5524,17 @@ bool WrappedVulkan::Serialise_vkCmdTraceRaysIndirect2KHR(SerialiserType &ser,
 
         uint32_t eventId = HandlePreCallback(commandBuffer, ActionFlags::DispatchRay);
 
-        ObjDisp(commandBuffer)->CmdTraceRaysIndirect2KHR(Unwrap(commandBuffer), indirectDeviceAddress);
-
-        if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::DispatchRay, commandBuffer))
+        // Check if this ray trace is disabled
+        if(!IsDrawDisabled(eventId))
         {
           ObjDisp(commandBuffer)->CmdTraceRaysIndirect2KHR(Unwrap(commandBuffer), indirectDeviceAddress);
 
-          m_ActionCallback->PostRemisc(eventId, ActionFlags::Clear, commandBuffer);
+          if(eventId && m_ActionCallback->PostDispatch(eventId, ActionFlags::DispatchRay, commandBuffer))
+          {
+            ObjDisp(commandBuffer)->CmdTraceRaysIndirect2KHR(Unwrap(commandBuffer), indirectDeviceAddress);
+
+            m_ActionCallback->PostRemisc(eventId, ActionFlags::Clear, commandBuffer);
+          }
         }
       }
     }

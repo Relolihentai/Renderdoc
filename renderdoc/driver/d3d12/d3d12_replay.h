@@ -285,6 +285,7 @@ public:
   RenderOutputSubresource GetRenderOutputSubresource(ResourceId id);
   bool IsRenderOutput(ResourceId id) { return GetRenderOutputSubresource(id).mip != ~0U; }
   void FileChanged() {}
+  void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState);
   AMDCounters *GetAMDCounters() { return m_pAMDCounters; }
   void PatchQuadWritePS(D3D12_EXPANDED_PIPELINE_STATE_STREAM_DESC &pipeDesc, uint32_t regSpace,
                         bool dxil);

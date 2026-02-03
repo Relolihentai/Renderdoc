@@ -263,6 +263,13 @@ private:
   RDTextEdit *m_CurrentFilterText;
 
   void RefreshShaderMessages();
+  void UpdateDisabledDraws();
+
+  // Flag to prevent selection change when clicking visibility column
+  bool m_IgnoreSelectionChange = false;
+
+  bool eventFilter(QObject *watched, QEvent *event) override;
+
   Ui::EventBrowser *ui;
   ICaptureContext &m_Ctx;
 };

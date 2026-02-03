@@ -371,6 +371,7 @@ public:
 
   RDResult ReadLogInitialisation(RDCFile *rdc, bool storeStructuredBuffers);
   void ReplayLog(uint32_t endEventID, ReplayLogType replayType);
+  void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState);
   SDFile *GetStructuredFile();
 
   rdcarray<uint32_t> GetPassEvents(uint32_t eventId);

@@ -26,6 +26,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include "core/core.h"
 #include "d3d11_common.h"
 #include "d3d11_manager.h"
@@ -238,6 +239,10 @@ private:
 
   RDResult m_FailedReplayResult = ResultCode::APIReplayFailed;
 
+  // Disabled draw calls - events that should be skipped during replay
+  std::set<uint32_t> m_DisabledDraws;
+  bool m_SkipStateOnDisabledDraw = false;
+
   ActionDescription m_ParentAction;
   std::map<ResourceId, ActionDescription> m_CmdLists;
 
@@ -353,6 +358,17 @@ public:
   void ThreadSafe_SetMarker(uint32_t col, const wchar_t *name);
   int ThreadSafe_BeginEvent(uint32_t col, const wchar_t *name);
   int ThreadSafe_EndEvent();
+
+  // Disabled draw calls management
+  void SetDisabledDrawCalls(const std::set<uint32_t> &disabledDraws, bool skipState)
+  {
+    m_DisabledDraws = disabledDraws;
+    m_SkipStateOnDisabledDraw = skipState;
+  }
+  bool IsDrawDisabled(uint32_t eventId) const
+  {
+    return m_DisabledDraws.find(eventId) != m_DisabledDraws.end();
+  }
 
   // internal addref/release
   void IntAddRef();

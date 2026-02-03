@@ -394,6 +394,7 @@ public:
   }
 
   void FileChanged() { RefreshFile(); }
+  void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState) {}
 private:
   void RefreshFile();
   void CreateProxyTexture(TextureDescription &texDetails, read_tex_data &read_data);

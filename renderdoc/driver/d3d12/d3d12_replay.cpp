@@ -355,6 +355,15 @@ void D3D12Replay::ReplayLog(uint32_t endEventID, ReplayLogType replayType)
     m_pDevice->ReplayWorkWaitForIdle();
 }
 
+void D3D12Replay::SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState)
+{
+  D3D12CommandData *cmd = m_pDevice->GetQueue()->GetCommandData();
+  cmd->m_DisabledDraws.clear();
+  for(uint32_t eid : disabledEventIds)
+    cmd->m_DisabledDraws.insert(eid);
+  cmd->m_SkipStateOnDisabledDraw = skipState;
+}
+
 SDFile *D3D12Replay::GetStructuredFile()
 {
   return m_pDevice->GetStructuredFile();

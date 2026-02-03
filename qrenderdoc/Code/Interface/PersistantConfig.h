@@ -428,6 +428,15 @@ DECLARE_REFLECTION_STRUCT(BugReport);
   CONFIG_SETTING_VAL(public, bool, bool, EventBrowser_ColorEventRow, true)                         \
                                                                                                    \
   DOCUMENT(                                                                                        \
+      "``True`` if disabled draw calls should also skip state setup (pipeline bindings, etc). "    \
+      "When ``False`` (default), only the actual draw command is skipped.\n"                       \
+      "\n"                                                                                         \
+      "Defaults to ``False``."                                                                     \
+      ""                                                                                           \
+      ":type: bool");                                                                              \
+  CONFIG_SETTING_VAL(public, bool, bool, EventBrowser_SkipStateOnDisabledDraw, false)              \
+                                                                                                   \
+  DOCUMENT(                                                                                        \
       "``True`` if when loading a new capture that contains a comments section, the comment "      \
       "viewer will be opened and focussed.\n"                                                      \
       "\n"                                                                                         \

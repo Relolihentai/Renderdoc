@@ -341,6 +341,10 @@ void DummyDriver::FileChanged()
 {
 }
 
+void DummyDriver::SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState)
+{
+}
+
 bool DummyDriver::NeedRemapForFetch(const ResourceFormat &format)
 {
   return false;

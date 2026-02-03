@@ -126,6 +126,8 @@ public:
 
   void FileChanged();
 
+  void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState);
+
   bool NeedRemapForFetch(const ResourceFormat &format);
 
   DriverInformation GetDriverInfo();

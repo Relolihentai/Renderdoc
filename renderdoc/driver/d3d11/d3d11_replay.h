@@ -309,6 +309,8 @@ public:
   RenderOutputSubresource GetRenderOutputSubresource(ResourceId id);
   bool IsRenderOutput(ResourceId id) { return GetRenderOutputSubresource(id).mip != ~0U; }
   void FileChanged() {}
+
+  void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState);
 private:
   bool m_WARP;
   bool m_Proxy;

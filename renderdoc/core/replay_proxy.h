@@ -575,6 +575,7 @@ public:
   void DeltaTransferBytes(SerialiserType &xferser, bytebuf &referenceData, bytebuf &newData);
 
   void FileChanged() {}
+  void SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState) {}
   // will never be used
   ResourceId CreateProxyTexture(const TextureDescription &templateTex)
   {

@@ -31,6 +31,7 @@
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QMenu>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -168,6 +169,7 @@ enum
 {
   COL_NAME,
   COL_EID,
+  COL_VISIBILITY,
   COL_ACTION,
   COL_DURATION,
   COL_COUNT,
@@ -375,6 +377,52 @@ struct EventItemModel : public QAbstractItemModel
       m_EIDNameCache.clear();
       m_View->viewport()->update();
     }
+  }
+
+  bool IsDrawDisabled(uint32_t eid) const { return m_DisabledDraws.contains(eid); }
+
+  void ToggleDrawVisibility(uint32_t eid)
+  {
+    if(m_DisabledDraws.contains(eid))
+      m_DisabledDraws.remove(eid);
+    else
+      m_DisabledDraws.insert(eid);
+
+    // Refresh the icon for this event
+    QModelIndex idx = GetIndexForEID(eid);
+    if(idx.isValid())
+      RefreshIcon(idx);
+  }
+
+  rdcarray<uint32_t> GetDisabledDraws() const
+  {
+    rdcarray<uint32_t> result;
+    for(uint32_t eid : m_DisabledDraws)
+      result.push_back(eid);
+    return result;
+  }
+
+  void ClearDisabledDraws()
+  {
+    QSet<uint32_t> old = m_DisabledDraws;
+    m_DisabledDraws.clear();
+    for(uint32_t eid : old)
+    {
+      QModelIndex idx = GetIndexForEID(eid);
+      if(idx.isValid())
+        RefreshIcon(idx);
+    }
+  }
+
+  bool IsActionEvent(uint32_t eid) const
+  {
+    if(eid >= m_Actions.size())
+      return false;
+    const ActionDescription *action = m_Actions[eid];
+    if(action == nullptr || action->eventId != eid)
+      return false;
+    // Check if it's a draw call or dispatch
+    return bool(action->flags & (ActionFlags::Drawcall | ActionFlags::Dispatch));
   }
 
   void UpdateDurationColumn()
@@ -716,6 +764,7 @@ struct EventItemModel : public QAbstractItemModel
     {
       switch(section)
       {
+        case COL_VISIBILITY: return QString();    // Icon column, no header text
         case COL_NAME: return tr("Name");
         case COL_EID: return lit("EID");
         case COL_ACTION: return lit("Action #");
@@ -734,12 +783,34 @@ struct EventItemModel : public QAbstractItemModel
 
     if(role == Qt::DecorationRole)
     {
-      if(index == m_CurrentEID)
-        return Icons::flag_green();
-      else if(m_BookmarkIndices.contains(index))
-        return Icons::asterisk_orange();
-      else if(m_FindResults.contains(index))
-        return Icons::find();
+      // Handle visibility column icon
+      if(index.column() == COL_VISIBILITY)
+      {
+        uint32_t eid = 0;
+        if(index.internalId() != TagRoot && index.internalId() != TagCaptureStart)
+          eid = index.internalId();
+
+        // Only show eye icon for actual draw calls/dispatches
+        if(IsActionEvent(eid))
+        {
+          if(IsDrawDisabled(eid))
+            return Icons::eye_off();
+          else
+            return Icons::eye();
+        }
+        return QVariant();
+      }
+
+      // Handle other decoration roles for name column
+      if(index.column() == COL_NAME)
+      {
+        if(index == m_CurrentEID)
+          return Icons::flag_green();
+        else if(m_BookmarkIndices.contains(index))
+          return Icons::asterisk_orange();
+        else if(m_FindResults.contains(index))
+          return Icons::find();
+      }
       return QVariant();
     }
 
@@ -961,6 +1032,9 @@ private:
   bool m_ShowParameterNames = false;
   bool m_ShowAllParameters = false;
   bool m_UseCustomActionNames = true;
+
+  // Disabled draw calls - these will be skipped during replay
+  QSet<uint32_t> m_DisabledDraws;
 
   // a cache of EID -> row in parent for looking up indices for arbitrary EIDs.
   rdcarray<rdcpair<uint32_t, int>> m_RowInParentCache;
@@ -3445,6 +3519,7 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->events->header()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
   // we set up the name column as column 0 so that it gets the tree controls.
+  ui->events->header()->setSectionResizeMode(COL_VISIBILITY, QHeaderView::Fixed);
   ui->events->header()->setSectionResizeMode(COL_NAME, QHeaderView::Interactive);
   ui->events->header()->setSectionResizeMode(COL_EID, QHeaderView::Interactive);
   ui->events->header()->setSectionResizeMode(COL_ACTION, QHeaderView::Interactive);
@@ -3462,6 +3537,7 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->events->setColoredTreeLineWidth(3.0f);
 
   // set up default section layout. This will be overridden in restoreState()
+  ui->events->header()->resizeSection(COL_VISIBILITY, 24);
   ui->events->header()->resizeSection(COL_EID, 80);
   ui->events->header()->resizeSection(COL_ACTION, 60);
   ui->events->header()->resizeSection(COL_NAME, 200);
@@ -3470,7 +3546,10 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   ui->events->header()->hideSection(COL_ACTION);
   ui->events->header()->hideSection(COL_DURATION);
 
-  ui->events->header()->moveSection(COL_NAME, 2);
+  // Visual order: EID -> VISIBILITY -> NAME -> ACTION -> DURATION
+  // NAME stays at logical 0 for tree controls, but we move EID and VISIBILITY visually before it
+  ui->events->header()->moveSection(COL_EID, 0);
+  ui->events->header()->moveSection(COL_VISIBILITY, 1);
 
   UpdateDurationColumn();
 
@@ -3487,6 +3566,27 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
   QObject::connect(ui->events, &RDTreeView::keyPress, this, &EventBrowser::events_keyPress);
   QObject::connect(ui->events->selectionModel(), &QItemSelectionModel::currentChanged, this,
                    &EventBrowser::events_currentChanged);
+
+  // Install event filter to detect visibility column clicks before selection changes
+  ui->events->viewport()->installEventFilter(this);
+
+  // Handle click on visibility column to toggle draw visibility
+  QObject::connect(ui->events, &QAbstractItemView::clicked, this, [this](const QModelIndex &index) {
+    // Map from filter model to source model
+    QModelIndex sourceIndex = m_FilterModel->mapToSource(index);
+    if(sourceIndex.column() == COL_VISIBILITY)
+    {
+      uint32_t eid = GetSelectedEID(sourceIndex);
+      if(eid > 0 && m_Model->IsActionEvent(eid))
+      {
+        m_Model->ToggleDrawVisibility(eid);
+        UpdateDisabledDraws();
+      }
+    }
+    // Reset the flag after click is processed
+    m_IgnoreSelectionChange = false;
+  });
+
   ui->find->setChecked(false);
   ui->bookmarkStrip->hide();
 
@@ -3709,6 +3809,9 @@ void EventBrowser::OnCaptureLoaded()
 
 void EventBrowser::OnCaptureClosed()
 {
+  // Clear disabled draws when capture is closed
+  m_Model->ClearDisabledDraws();
+
   clearBookmarks();
 
   on_HideFind();
@@ -3782,6 +3885,10 @@ void EventBrowser::on_timeActions_clicked()
 void EventBrowser::events_currentChanged(const QModelIndex &current, const QModelIndex &previous)
 {
   if(!current.isValid())
+    return;
+
+  // If clicking on visibility column, don't change the current event
+  if(m_IgnoreSelectionChange)
     return;
 
   uint32_t selectedEID = GetSelectedEID(current);
@@ -5196,6 +5303,10 @@ void EventBrowser::setPersistData(const QVariant &persistData)
   QVariantMap state = persistData.toMap();
 
   QVariantList columns = state[lit("columns")].toList();
+
+  // Check if saved state has fewer columns than current (new columns were added)
+  bool columnCountMismatch = (columns.count() != COL_COUNT);
+
   for(int i = 0; i < columns.count() && i < COL_COUNT; i++)
   {
     QVariantMap col = columns[i].toMap();
@@ -5211,6 +5322,18 @@ void EventBrowser::setPersistData(const QVariant &persistData)
       ui->events->header()->hideSection(i);
     else
       ui->events->header()->showSection(i);
+  }
+
+  // If column count doesn't match (new columns added), ensure VISIBILITY column is properly set up
+  if(columnCountMismatch)
+  {
+    ui->events->header()->showSection(COL_VISIBILITY);
+    ui->events->header()->resizeSection(COL_VISIBILITY, 24);
+    // Position visibility column after EID
+    int eidVisIdx = ui->events->header()->visualIndex(COL_EID);
+    int visVisIdx = ui->events->header()->visualIndex(COL_VISIBILITY);
+    if(visVisIdx != eidVisIdx + 1)
+      ui->events->header()->moveSection(visVisIdx, eidVisIdx + 1);
   }
 }
 
@@ -5744,4 +5867,47 @@ void EventBrowser::SetUseCustomActionNames(bool use)
 void EventBrowser::SetEmptyRegionsVisible(bool show)
 {
   m_FilterModel->SetEmptyRegionsVisible(show);
+}
+
+void EventBrowser::UpdateDisabledDraws()
+{
+  if(!m_Ctx.IsCaptureLoaded())
+    return;
+
+  rdcarray<uint32_t> disabled = m_Model->GetDisabledDraws();
+  bool skipState = m_Ctx.Config().EventBrowser_SkipStateOnDisabledDraw;
+
+  // Use BlockingInvoke to ensure SetDisabledDrawCalls completes before RefreshStatus
+  m_Ctx.Replay().BlockInvoke([disabled, skipState](IReplayController *r) {
+    r->SetDisabledDrawCalls(disabled, skipState);
+  });
+
+  // Use RefreshStatus to properly re-replay and update all viewers
+  m_Ctx.RefreshStatus();
+}
+
+bool EventBrowser::eventFilter(QObject *watched, QEvent *event)
+{
+  // Detect mouse press on visibility column before selection changes
+  if(watched == ui->events->viewport() && event->type() == QEvent::MouseButtonPress)
+  {
+    QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+    QModelIndex index = ui->events->indexAt(mouseEvent->pos());
+    if(index.isValid())
+    {
+      // Map to source model to check the column
+      QModelIndex sourceIndex = m_FilterModel->mapToSource(index);
+      if(sourceIndex.column() == COL_VISIBILITY)
+      {
+        uint32_t eid = GetSelectedEID(sourceIndex);
+        if(eid > 0 && m_Model->IsActionEvent(eid))
+        {
+          // Set flag to prevent selection change
+          m_IgnoreSelectionChange = true;
+        }
+      }
+    }
+  }
+
+  return QFrame::eventFilter(watched, event);
 }

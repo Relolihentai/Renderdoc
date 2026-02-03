@@ -1893,6 +1893,14 @@ void ReplayController::CancelReplayLoop()
     Threading::Sleep(1);
 }
 
+void ReplayController::SetDisabledDrawCalls(const rdcarray<uint32_t> &disabledEventIds, bool skipState)
+{
+  CHECK_REPLAY_THREAD();
+  m_DisabledDraws = disabledEventIds;
+  m_SkipStateOnDisabledDraw = skipState;
+  m_pDevice->SetDisabledDrawCalls(disabledEventIds, skipState);
+}
+
 ReplayOutput *ReplayController::CreateOutput(WindowingData window, ReplayOutputType type)
 {
   CHECK_REPLAY_THREAD();

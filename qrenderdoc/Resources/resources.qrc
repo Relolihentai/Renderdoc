@@ -83,6 +83,8 @@
         <file>disconnect@2x.png</file>
         <file>draw_vertex.png</file>
         <file>draw_vertex@2x.png</file>
+        <file>eye.svg</file>
+        <file>eye_off.svg</file>
         <file>filter.png</file>
         <file>filter@2x.png</file>
         <file>filter_reapply.png</file>

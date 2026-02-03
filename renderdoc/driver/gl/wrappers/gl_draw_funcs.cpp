@@ -160,6 +160,9 @@ static constexpr uint32_t GetIdxSize(GLenum idxtype)
 
 bool WrappedOpenGL::Check_SafeDrawAtEventID(uint32_t eid) const
 {
+  // Check if draw is disabled
+  if(m_DisabledDraws.find(eid) != m_DisabledDraws.end())
+    return false;
   return m_UnsafeDraws.find(eid) == m_UnsafeDraws.end();
 }
 
