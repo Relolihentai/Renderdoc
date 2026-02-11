@@ -101,6 +101,15 @@
             </Directory>
           </Directory>
 
+          <Directory Id='plugins' Name='plugins'>
+            <Directory Id='plugins_android' Name='android'>
+              <Component Id='android_plugin' Win64="yes" Guid='328B7D53-1323-4D9B-8966-3D8567E3723B'>
+                <File Id='APKarm32' Name='org.renderdoc.renderdoccmd.arm32.apk' DiskId='1' Source='dist/Release64/plugins/android/org.renderdoc.renderdoccmd.arm32.apk' KeyPath='yes' />
+                <File Id='APKarm64' Name='org.renderdoc.renderdoccmd.arm64.apk' DiskId='1' Source='dist/Release64/plugins/android/org.renderdoc.renderdoccmd.arm64.apk' />
+              </Component>
+            </Directory>
+          </Directory>
+
         </Directory>
       </Directory>
 
@@ -157,6 +166,7 @@
         <ComponentRef Id='Python' />
         <ComponentRef Id='qt_imgplugin' />
         <ComponentRef Id='qt_platplugin' />
+        <ComponentRef Id='android_plugin' />
         <ComponentRef Id='ProgramMenuDir' />
       </Feature>
 
