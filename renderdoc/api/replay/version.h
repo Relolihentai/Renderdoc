@@ -106,7 +106,7 @@ extern "C" const char GitVersionHash[41];
 
 // string that's the actual version number, either from the distribution or just vX.Y
 #if defined(DISTRIBUTION_VERSION)
-#define FULL_VERSION_STRING "v" DISTRIBUTION_VERSION
+#define FULL_VERSION_STRING DISTRIBUTION_NAME "_v" DISTRIBUTION_VERSION
 #else
 #define FULL_VERSION_STRING "v" MAJOR_MINOR_VERSION_STRING
 #endif

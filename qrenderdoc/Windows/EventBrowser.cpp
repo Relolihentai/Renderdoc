@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * The MIT License (MIT)
  *
  * Copyright (c) 2015-2026 Baldur Karlsson
@@ -425,6 +425,70 @@ struct EventItemModel : public QAbstractItemModel
     return bool(action->flags & (ActionFlags::Drawcall | ActionFlags::Dispatch));
   }
 
+  bool IsMarkerNode(uint32_t eid) const
+  {
+    if(eid >= m_Actions.size())
+      return false;
+    const ActionDescription *action = m_Actions[eid];
+    if(action == nullptr || action->eventId != eid)
+      return false;
+    // Check if it has children (is a marker/group)
+    return !action->children.empty();
+  }
+
+  void GetAllChildActions(const ActionDescription *action, QSet<uint32_t> &result) const
+  {
+    for(const ActionDescription &child : action->children)
+    {
+      if(child.flags & (ActionFlags::Drawcall | ActionFlags::Dispatch))
+        result.insert(child.eventId);
+      if(!child.children.empty())
+        GetAllChildActions(&child, result);
+    }
+  }
+
+  void ToggleMarkerVisibility(uint32_t eid)
+  {
+    if(eid >= m_Actions.size())
+      return;
+    const ActionDescription *action = m_Actions[eid];
+    if(action == nullptr || action->children.empty())
+      return;
+
+    // 获取所有子action
+    QSet<uint32_t> childActions;
+    GetAllChildActions(action, childActions);
+
+    // 判断当前状态：如果有任何子action是启用的，则全部禁用；否则全部启用
+    bool anyEnabled = false;
+    for(uint32_t childEid : childActions)
+    {
+      if(!m_DisabledDraws.contains(childEid))
+      {
+        anyEnabled = true;
+        break;
+      }
+    }
+
+    // 批量切换
+    for(uint32_t childEid : childActions)
+    {
+      if(anyEnabled)
+        m_DisabledDraws.insert(childEid);
+      else
+        m_DisabledDraws.remove(childEid);
+
+      QModelIndex idx = GetIndexForEID(childEid);
+      if(idx.isValid())
+        RefreshIcon(idx);
+    }
+
+    // 刷新marker节点本身的图标
+    QModelIndex idx = GetIndexForEID(eid);
+    if(idx.isValid())
+      RefreshIcon(idx);
+  }
+
   void UpdateDurationColumn()
   {
     m_TimeUnit = m_Ctx.Config().EventBrowser_TimeUnit;
@@ -790,10 +854,33 @@ struct EventItemModel : public QAbstractItemModel
         if(index.internalId() != TagRoot && index.internalId() != TagCaptureStart)
           eid = index.internalId();
 
-        // Only show eye icon for actual draw calls/dispatches
+        // Show eye icon for draw calls/dispatches
         if(IsActionEvent(eid))
         {
           if(IsDrawDisabled(eid))
+            return Icons::eye_off();
+          else
+            return Icons::eye();
+        }
+
+        // Show eye icon for marker nodes (groups with children)
+        if(IsMarkerNode(eid))
+        {
+          // Check if all children are disabled
+          QSet<uint32_t> childActions;
+          GetAllChildActions(m_Actions[eid], childActions);
+
+          bool allDisabled = true;
+          for(uint32_t childEid : childActions)
+          {
+            if(!m_DisabledDraws.contains(childEid))
+            {
+              allDisabled = false;
+              break;
+            }
+          }
+
+          if(allDisabled && !childActions.empty())
             return Icons::eye_off();
           else
             return Icons::eye();
@@ -3577,10 +3664,18 @@ EventBrowser::EventBrowser(ICaptureContext &ctx, QWidget *parent)
     if(sourceIndex.column() == COL_VISIBILITY)
     {
       uint32_t eid = GetSelectedEID(sourceIndex);
-      if(eid > 0 && m_Model->IsActionEvent(eid))
+      if(eid > 0)
       {
-        m_Model->ToggleDrawVisibility(eid);
-        UpdateDisabledDraws();
+        if(m_Model->IsActionEvent(eid))
+        {
+          m_Model->ToggleDrawVisibility(eid);
+          UpdateDisabledDraws();
+        }
+        else if(m_Model->IsMarkerNode(eid))
+        {
+          m_Model->ToggleMarkerVisibility(eid);
+          UpdateDisabledDraws();
+        }
       }
     }
     // Reset the flag after click is processed
@@ -3838,8 +3933,17 @@ void EventBrowser::OnCaptureClosed()
 
 void EventBrowser::OnEventChanged(uint32_t eventId)
 {
+  // Save scroll position before SelectEvent to restore later
+  // This prevents scroll jumping when refreshing (e.g., toggling draw visibility)
+  int scrollValue = ui->events->verticalScrollBar()->value();
+
   if(!SelectEvent(m_Ctx.CurSelectedEvent()))
     ui->events->setCurrentIndex(QModelIndex());
+
+  // Restore scroll position - OnEventChanged is only called for refresh operations,
+  // not for user-initiated event selection (which excludes this viewer via SetEventID)
+  ui->events->verticalScrollBar()->setValue(scrollValue);
+
   repopulateBookmarks();
   highlightBookmarks();
 
@@ -5900,7 +6004,7 @@ bool EventBrowser::eventFilter(QObject *watched, QEvent *event)
       if(sourceIndex.column() == COL_VISIBILITY)
       {
         uint32_t eid = GetSelectedEID(sourceIndex);
-        if(eid > 0 && m_Model->IsActionEvent(eid))
+        if(eid > 0 && (m_Model->IsActionEvent(eid) || m_Model->IsMarkerNode(eid)))
         {
           // Set flag to prevent selection change
           m_IgnoreSelectionChange = true;
