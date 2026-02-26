@@ -133,6 +133,115 @@ function Test-CommandExists {
     $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
 }
 
+# 进度条相关变量
+$script:ProgressId = 1
+$script:CurrentStep = 0
+$script:TotalSteps = 0
+$script:StepNames = @()
+$script:SubProgressId = 2
+
+function Initialize-BuildProgress {
+    <#
+    .SYNOPSIS
+        初始化构建进度条，计算实际要执行的步骤数
+    #>
+    $script:StepNames = @()
+    
+    if ($Clean) {
+        $script:StepNames += "清理构建产物"
+    }
+    if (-not $SkipWindowsBuild) {
+        $script:StepNames += "编译 Windows RenderDoc"
+    }
+    if (-not $SkipAndroidBuild) {
+        $script:StepNames += "编译 Android APK"
+    }
+    $script:StepNames += "准备 dist 目录"
+    if (-not $SkipMSI) {
+        $script:StepNames += "生成 MSI 安装包"
+    }
+    if (-not $SkipZIP) {
+        $script:StepNames += "打包 ZIP 便携版"
+    }
+    
+    $script:TotalSteps = $script:StepNames.Count
+    $script:CurrentStep = 0
+}
+
+function Update-BuildProgress {
+    param(
+        [string]$StepName,
+        [string]$Status = "正在处理...",
+        [switch]$Completed
+    )
+    <#
+    .SYNOPSIS
+        更新构建进度条
+    #>
+    
+    if ($Completed) {
+        $script:CurrentStep++
+    }
+    
+    $percentComplete = if ($script:TotalSteps -gt 0) {
+        [math]::Round(($script:CurrentStep / $script:TotalSteps) * 100)
+    } else {
+        0
+    }
+    
+    $activity = "RenderDoc 构建进度 [$script:CurrentStep/$script:TotalSteps]"
+    
+    Write-Progress -Id $script:ProgressId `
+                   -Activity $activity `
+                   -Status "$StepName - $Status" `
+                   -PercentComplete $percentComplete
+}
+
+function Update-SubProgress {
+    param(
+        [string]$Activity,
+        [string]$Status,
+        [int]$PercentComplete = -1,
+        [int]$Current = 0,
+        [int]$Total = 0,
+        [switch]$Completed
+    )
+    <#
+    .SYNOPSIS
+        更新子进度条（用于显示编译等长时间操作的详细进度）
+    #>
+    
+    if ($Completed) {
+        Write-Progress -Id $script:SubProgressId -Activity $Activity -Completed
+        return
+    }
+    
+    # 如果提供了 Current 和 Total，计算百分比
+    if ($Total -gt 0) {
+        $PercentComplete = [math]::Round(($Current / $Total) * 100)
+        $Status = "[$Current/$Total] $Status"
+    }
+    
+    # 确保百分比在有效范围内
+    if ($PercentComplete -lt 0) { $PercentComplete = 0 }
+    if ($PercentComplete -gt 100) { $PercentComplete = 100 }
+    
+    Write-Progress -Id $script:SubProgressId `
+                   -ParentId $script:ProgressId `
+                   -Activity $Activity `
+                   -Status $Status `
+                   -PercentComplete $PercentComplete
+}
+
+function Complete-BuildProgress {
+    <#
+    .SYNOPSIS
+        完成并关闭进度条
+    #>
+    Write-Progress -Id $script:SubProgressId -Activity "子任务" -Completed
+    Write-Progress -Id $script:ProgressId -Activity "构建完成" -Completed
+}
+
 function Find-MSBuild {
     <#
     .SYNOPSIS
@@ -331,6 +440,223 @@ function Find-BashShell {
     return $null
 }
 
+function Invoke-AndroidBuildArch {
+    param(
+        [string]$BashPath,
+        [string]$Arch,           # "arm32" 或 "arm64"
+        [string]$ABI,            # "armeabi-v7a" 或 "arm64-v8a"
+        [string]$ProjectRootUnix,
+        [string]$AndroidSdkUnix,
+        [string]$AndroidNdkUnix,
+        [string]$JavaHomeUnix,
+        [bool]$CleanBuild
+    )
+    <#
+    .SYNOPSIS
+        编译单个架构的 Android APK，并实时显示进度
+    #>
+    
+    $buildDir = Join-Path $ProjectRoot "build-android-$Arch"
+    $cleanFlag = if ($CleanBuild) { "1" } else { "0" }
+    
+    # 子步骤：检测构建工具和配置
+    $needConfigure = $CleanBuild -or (-not (Test-Path $buildDir)) -or (-not (Test-Path (Join-Path $buildDir "CMakeCache.txt")))
+    
+    # 创建编译脚本
+    $buildScript = @"
+#!/bin/bash
+set -e
+
+export ANDROID_SDK="$AndroidSdkUnix"
+export ANDROID_NDK="$AndroidNdkUnix"
+export ANDROID_HOME="$AndroidSdkUnix"
+export ANDROID_NDK_HOME="$AndroidNdkUnix"
+export JAVA_HOME="$JavaHomeUnix"
+export PATH="$AndroidNdkUnix/prebuilt/windows-x86_64/bin:`$JAVA_HOME/bin:`$PATH"
+
+cd "$ProjectRootUnix"
+
+ARCH="$Arch"
+ABI="$ABI"
+BUILD_DIR="build-android-`$ARCH"
+CLEAN_BUILD=$cleanFlag
+
+# 检测构建工具
+if command -v ninja &> /dev/null; then
+    GENERATOR="Ninja"
+    BUILD_CMD="ninja"
+else
+    GENERATOR="Unix Makefiles"
+    BUILD_CMD="make"
+fi
+
+JOBS=`$(nproc 2>/dev/null || echo 4)
+
+# CMake 配置
+if [ "`$CLEAN_BUILD" = "1" ] || [ ! -d "`$BUILD_DIR" ] || [ ! -f "`$BUILD_DIR/CMakeCache.txt" ]; then
+    echo "PROGRESS:CONFIGURE:START"
+    if [ "`$CLEAN_BUILD" = "1" ] && [ -d "`$BUILD_DIR" ]; then
+        rm -rf "`$BUILD_DIR"
+    fi
+    mkdir -p "`$BUILD_DIR"
+    cd "`$BUILD_DIR"
+    
+    cmake -G "`$GENERATOR" \
+        -DBUILD_ANDROID=1 \
+        -DANDROID_ABI=`$ABI \
+        -DANDROID_NATIVE_API_LEVEL=23 \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DSTRIP_ANDROID_LIBRARY=On \
+        ..
+    echo "PROGRESS:CONFIGURE:DONE"
+else
+    echo "PROGRESS:CONFIGURE:SKIP"
+    cd "`$BUILD_DIR"
+fi
+
+# 编译
+echo "PROGRESS:BUILD:START"
+if [ "`$BUILD_CMD" = "ninja" ]; then
+    # Ninja 默认输出 [x/y] 格式的进度
+    ninja 2>&1
+else
+    # Make 使用 --jobserver-style=pipe 来显示进度（如果支持）
+    make -j`$JOBS 2>&1
+fi
+echo "PROGRESS:BUILD:DONE"
+
+# 验证
+if [ ! -f "bin/org.renderdoc.renderdoccmd.`$ARCH.apk" ]; then
+    echo "PROGRESS:BUILD:FAILED"
+    exit 1
+fi
+
+echo "PROGRESS:COMPLETE"
+"@
+
+    $buildScriptPath = Join-Path $ProjectRoot "scripts\build_android_${Arch}_temp.sh"
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($buildScriptPath, ($buildScript -replace "`r`n", "`n"), $utf8NoBom)
+    
+    $buildScriptUnix = $buildScriptPath -replace '\\', '/' -replace '^([A-Za-z]):', '/$1'
+    
+    # 执行编译并解析输出
+    $currentPhase = "准备中"
+    $buildCurrent = 0
+    $buildTotal = 0
+    $lastPercent = 0
+    
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = $BashPath
+        $psi.Arguments = if ($BashPath -eq "bash") { $buildScriptUnix } else { "--login -c `"bash '$buildScriptUnix'`"" }
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $psi.WorkingDirectory = $ProjectRoot
+        
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $psi
+        
+        # 注册输出事件处理
+        $outputBuilder = New-Object System.Text.StringBuilder
+        $errorBuilder = New-Object System.Text.StringBuilder
+        
+        $process.Start() | Out-Null
+        
+        # 实时读取输出
+        while (-not $process.HasExited) {
+            $line = $process.StandardOutput.ReadLine()
+            if ($null -ne $line) {
+                # 解析进度信息
+                if ($line -match "^PROGRESS:CONFIGURE:START") {
+                    $currentPhase = "CMake 配置"
+                    Update-SubProgress -Activity "$Arch APK" -Status "正在配置 CMake..." -PercentComplete 10
+                }
+                elseif ($line -match "^PROGRESS:CONFIGURE:(DONE|SKIP)") {
+                    $currentPhase = "配置完成"
+                    Update-SubProgress -Activity "$Arch APK" -Status "配置完成" -PercentComplete 20
+                }
+                elseif ($line -match "^PROGRESS:BUILD:START") {
+                    $currentPhase = "编译中"
+                    Update-SubProgress -Activity "$Arch APK" -Status "开始编译..." -PercentComplete 25
+                }
+                elseif ($line -match "^\[(\d+)/(\d+)\]") {
+                    # Ninja 格式: [当前/总数] 目标
+                    $buildCurrent = [int]$Matches[1]
+                    $buildTotal = [int]$Matches[2]
+                    $buildPercent = [math]::Round(($buildCurrent / $buildTotal) * 75) + 25  # 25-100%
+                    if ($buildPercent -gt $lastPercent) {
+                        $lastPercent = $buildPercent
+                        $targetName = ($line -replace "^\[\d+/\d+\]\s*", "").Trim()
+                        if ($targetName.Length -gt 50) {
+                            $targetName = $targetName.Substring(0, 47) + "..."
+                        }
+                        Update-SubProgress -Activity "$Arch APK 编译" -Status $targetName -Current $buildCurrent -Total $buildTotal
+                    }
+                }
+                elseif ($line -match "^\[\s*(\d+)%\]") {
+                    # Make 百分比格式
+                    $makePercent = [int]$Matches[1]
+                    $buildPercent = [math]::Round($makePercent * 0.75) + 25  # 25-100%
+                    if ($buildPercent -gt $lastPercent) {
+                        $lastPercent = $buildPercent
+                        Update-SubProgress -Activity "$Arch APK 编译" -Status "编译中..." -PercentComplete $buildPercent
+                    }
+                }
+                elseif ($line -match "^PROGRESS:BUILD:DONE") {
+                    Update-SubProgress -Activity "$Arch APK" -Status "编译完成" -PercentComplete 100
+                }
+                elseif ($line -match "^PROGRESS:COMPLETE") {
+                    Update-SubProgress -Activity "$Arch APK" -Status "完成!" -PercentComplete 100
+                }
+                elseif ($line -notmatch "^PROGRESS:") {
+                    # 输出非进度信息
+                    [void]$outputBuilder.AppendLine($line)
+                    # 只显示重要信息
+                    if ($line -match "(error|warning|Error|Warning|ERROR|WARNING)" -or $line -match "^--") {
+                        Write-Host "  $line" -ForegroundColor $(if ($line -match "error|Error|ERROR") { "Red" } elseif ($line -match "warning|Warning|WARNING") { "Yellow" } else { "DarkGray" })
+                    }
+                }
+            }
+            Start-Sleep -Milliseconds 50
+        }
+        
+        # 读取剩余输出
+        $remaining = $process.StandardOutput.ReadToEnd()
+        if ($remaining) {
+            [void]$outputBuilder.Append($remaining)
+        }
+        
+        $errorOutput = $process.StandardError.ReadToEnd()
+        if ($errorOutput) {
+            [void]$errorBuilder.Append($errorOutput)
+        }
+        
+        $process.WaitForExit()
+        
+        if ($process.ExitCode -ne 0) {
+            Write-Error "  $Arch 编译失败 (退出代码: $($process.ExitCode))"
+            if ($errorBuilder.Length -gt 0) {
+                Write-Host $errorBuilder.ToString() -ForegroundColor Red
+            }
+            return $false
+        }
+        
+        # 关闭子进度条
+        Update-SubProgress -Activity "$Arch APK" -Completed
+        
+        return $true
+    }
+    finally {
+        # 清理临时脚本
+        if (Test-Path $buildScriptPath) {
+            Remove-Item -Path $buildScriptPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Invoke-AndroidBuild {
     Write-Header "步骤 2: 编译 Android APK"
     
@@ -388,17 +714,11 @@ function Invoke-AndroidBuild {
     $buildArm32 = -not $AndroidArm64Only
     $buildArm64 = -not $AndroidArm32Only
     
-    $buildArm32Flag = if ($buildArm32) { "1" } else { "0" }
-    $buildArm64Flag = if ($buildArm64) { "1" } else { "0" }
-    $cleanAndroidFlag = if ($CleanAndroid) { "1" } else { "0" }
+    $archList = @()
+    if ($buildArm32) { $archList += "ARM32" }
+    if ($buildArm64) { $archList += "ARM64" }
     
-    if ($buildArm32 -and $buildArm64) {
-        Write-Step "将编译: ARM32 + ARM64"
-    } elseif ($buildArm32) {
-        Write-Step "将编译: 仅 ARM32"
-    } else {
-        Write-Step "将编译: 仅 ARM64"
-    }
+    Write-Step "将编译: $($archList -join ' + ')"
     
     if (-not $CleanAndroid) {
         Write-Step "使用增量编译 (如需完全重建，请添加 -CleanAndroid 参数)"
@@ -406,152 +726,84 @@ function Invoke-AndroidBuild {
         Write-Step "将清理并完全重新编译"
     }
     
-    # 创建临时的 bash 构建脚本 - 支持增量编译
-    $buildScript = @"
-#!/bin/bash
-set -e
-
-export ANDROID_SDK="$androidSdkUnix"
-export ANDROID_NDK="$androidNdkUnix"
-export ANDROID_HOME="$androidSdkUnix"
-export ANDROID_NDK_HOME="$androidNdkUnix"
-export JAVA_HOME="$javaHomeUnix"
-
-# 添加 NDK 自带的 make 到 PATH
-export PATH="$androidNdkUnix/prebuilt/windows-x86_64/bin:`$JAVA_HOME/bin:`$PATH"
-
-cd "$projectRootUnix"
-
-# 检测是否有 ninja
-if command -v ninja &> /dev/null; then
-    GENERATOR="Ninja"
-    BUILD_CMD="ninja"
-    echo "[优化] 检测到 Ninja，将使用 Ninja 构建 (比 Make 更快)"
-else
-    GENERATOR="Unix Makefiles"
-    BUILD_CMD="make"
-    echo "[提示] 未检测到 Ninja，使用 Make 构建"
-    echo "[提示] 安装 Ninja 可显著加快编译速度: pacman -S ninja (MSYS2) 或下载 ninja.exe 放入 PATH"
-fi
-
-# 获取CPU核心数
-JOBS=`$(nproc 2>/dev/null || echo 4)
-echo "[信息] 使用 `$JOBS 个并行任务"
-
-BUILD_ARM32=$buildArm32Flag
-BUILD_ARM64=$buildArm64Flag
-CLEAN_BUILD=$cleanAndroidFlag
-
-# 函数: 配置并构建指定架构
-build_arch() {
-    local ARCH=`$1
-    local ABI=`$2
-    local BUILD_DIR="build-android-`$ARCH"
-    
-    echo "=========================================="
-    echo "Building `$ARCH APK..."
-    echo "=========================================="
-    
-    # 仅在指定清理或目录不存在时重新配置
-    if [ "`$CLEAN_BUILD" = "1" ] || [ ! -d "`$BUILD_DIR" ] || [ ! -f "`$BUILD_DIR/CMakeCache.txt" ]; then
-        echo "[配置] 运行 CMake 配置..."
-        if [ "`$CLEAN_BUILD" = "1" ] && [ -d "`$BUILD_DIR" ]; then
-            rm -rf "`$BUILD_DIR"
-        fi
-        mkdir -p "`$BUILD_DIR"
-        cd "`$BUILD_DIR"
-        
-        cmake -G "`$GENERATOR" \
-            -DBUILD_ANDROID=1 \
-            -DANDROID_ABI=`$ABI \
-            -DANDROID_NATIVE_API_LEVEL=23 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DSTRIP_ANDROID_LIBRARY=On \
-            ..
-    else
-        echo "[增量] 跳过 CMake 配置，使用已有配置"
-        cd "`$BUILD_DIR"
-    fi
-    
-    # 编译
-    echo "[编译] 开始编译..."
-    if [ "`$BUILD_CMD" = "ninja" ]; then
-        ninja
-    else
-        make -j`$JOBS
-    fi
-    
-    # 验证
-    if [ ! -f "bin/org.renderdoc.renderdoccmd.`$ARCH.apk" ]; then
-        echo "`$ARCH APK build failed!"
-        exit 1
-    fi
-    
-    echo "`$ARCH APK built successfully!"
-    cd "$projectRootUnix"
-}
-
-# 构建指定的架构
-if [ "`$BUILD_ARM32" = "1" ]; then
-    build_arch "arm32" "armeabi-v7a"
-fi
-
-if [ "`$BUILD_ARM64" = "1" ]; then
-    build_arch "arm64" "arm64-v8a"
-fi
-
-echo "=========================================="
-echo "Android APK build completed!"
-echo "=========================================="
-"@
-    
-    $buildScriptPath = Join-Path $ProjectRoot "scripts\build_android_temp.sh"
-    
-    # 使用 UTF-8 无 BOM 编码，Unix 换行符
-    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-    [System.IO.File]::WriteAllText($buildScriptPath, ($buildScript -replace "`r`n", "`n"), $utf8NoBom)
-    
-    Write-Step "正在编译 Android APK (ARM32 + ARM64)..."
-    Write-Step "这可能需要几分钟时间..."
+    Write-Host ""
     
     Push-Location $ProjectRoot
     
+    $success = $true
+    $archCount = $archList.Count
+    $currentArch = 0
+    
     try {
-        # 执行 bash 脚本
-        $buildScriptUnix = $buildScriptPath -replace '\\', '/' -replace '^([A-Za-z]):', '/$1'
-        
-        if ($bashPath -eq "bash") {
-            & bash $buildScriptUnix
-        } else {
-            & $bashPath --login -c "bash '$buildScriptUnix'"
+        # 编译 ARM32
+        if ($buildArm32) {
+            $currentArch++
+            Write-Step "[$currentArch/$archCount] 编译 ARM32 APK..."
+            Update-SubProgress -Activity "ARM32 APK" -Status "准备中..." -PercentComplete 0
+            
+            $arm32Success = Invoke-AndroidBuildArch `
+                -BashPath $bashPath `
+                -Arch "arm32" `
+                -ABI "armeabi-v7a" `
+                -ProjectRootUnix $projectRootUnix `
+                -AndroidSdkUnix $androidSdkUnix `
+                -AndroidNdkUnix $androidNdkUnix `
+                -JavaHomeUnix $javaHomeUnix `
+                -CleanBuild $CleanAndroid
+            
+            if (-not $arm32Success) {
+                $success = $false
+                Write-Error "ARM32 APK 编译失败"
+            } else {
+                Write-Step "ARM32 APK 编译成功!"
+            }
         }
         
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Android APK 编译失败，退出代码: $LASTEXITCODE"
-            return $false
+        # 编译 ARM64
+        if ($buildArm64 -and $success) {
+            $currentArch++
+            Write-Step "[$currentArch/$archCount] 编译 ARM64 APK..."
+            Update-SubProgress -Activity "ARM64 APK" -Status "准备中..." -PercentComplete 0
+            
+            $arm64Success = Invoke-AndroidBuildArch `
+                -BashPath $bashPath `
+                -Arch "arm64" `
+                -ABI "arm64-v8a" `
+                -ProjectRootUnix $projectRootUnix `
+                -AndroidSdkUnix $androidSdkUnix `
+                -AndroidNdkUnix $androidNdkUnix `
+                -JavaHomeUnix $javaHomeUnix `
+                -CleanBuild $CleanAndroid
+            
+            if (-not $arm64Success) {
+                $success = $false
+                Write-Error "ARM64 APK 编译失败"
+            } else {
+                Write-Step "ARM64 APK 编译成功!"
+            }
         }
         
-        # 验证输出文件
-        $apkArm32 = Join-Path $AndroidBuildArm32 "bin\org.renderdoc.renderdoccmd.arm32.apk"
-        $apkArm64 = Join-Path $AndroidBuildArm64 "bin\org.renderdoc.renderdoccmd.arm64.apk"
+        # 关闭子进度条
+        Update-SubProgress -Activity "Android APK" -Completed
         
-        if ((Test-Path $apkArm32) -and (Test-Path $apkArm64)) {
+        if ($success) {
+            # 验证输出文件
+            $apkArm32 = Join-Path $AndroidBuildArm32 "bin\org.renderdoc.renderdoccmd.arm32.apk"
+            $apkArm64 = Join-Path $AndroidBuildArm64 "bin\org.renderdoc.renderdoccmd.arm64.apk"
+            
             Write-Step "Android APK 编译完成!"
-            Write-Step "  - ARM32: $apkArm32"
-            Write-Step "  - ARM64: $apkArm64"
-            return $true
-        } else {
-            Write-Error "Android APK 文件未生成"
-            return $false
+            if ($buildArm32 -and (Test-Path $apkArm32)) {
+                Write-Step "  - ARM32: $apkArm32"
+            }
+            if ($buildArm64 -and (Test-Path $apkArm64)) {
+                Write-Step "  - ARM64: $apkArm64"
+            }
         }
+        
+        return $success
     }
     finally {
         Pop-Location
-        
-        # 清理临时脚本
-        if (Test-Path $buildScriptPath) {
-            Remove-Item -Path $buildScriptPath -Force -ErrorAction SilentlyContinue
-        }
     }
 }
 
@@ -1086,15 +1338,24 @@ function Main {
     
     $startTime = Get-Date
     
+    # 初始化进度条
+    Initialize-BuildProgress
+    Write-Host "将执行 $script:TotalSteps 个构建步骤: $($script:StepNames -join ' → ')" -ForegroundColor DarkCyan
+    Write-Host ""
+    
     # 清理
     if ($Clean) {
+        Update-BuildProgress -StepName "清理构建产物" -Status "正在清理..."
         Invoke-Clean
+        Update-BuildProgress -StepName "清理构建产物" -Status "完成" -Completed
     }
     
     # 步骤 1: Windows 编译
     if (-not $SkipWindowsBuild) {
+        Update-BuildProgress -StepName "编译 Windows RenderDoc" -Status "正在编译..."
         Invoke-WindowsBuild
         $buildResults.WindowsBuild = $LASTEXITCODE -eq 0
+        Update-BuildProgress -StepName "编译 Windows RenderDoc" -Status "完成" -Completed
     } else {
         Write-Step "跳过 Windows 编译"
         $buildResults.WindowsBuild = $null
@@ -1102,14 +1363,18 @@ function Main {
     
     # 步骤 2: Android 编译
     if (-not $SkipAndroidBuild) {
+        Update-BuildProgress -StepName "编译 Android APK" -Status "正在编译..."
         $buildResults.AndroidBuild = Invoke-AndroidBuild
+        Update-BuildProgress -StepName "编译 Android APK" -Status "完成" -Completed
     } else {
         Write-Step "跳过 Android 编译"
         $buildResults.AndroidBuild = $null
     }
     
     # 步骤 3: 准备 dist 目录
+    Update-BuildProgress -StepName "准备 dist 目录" -Status "正在复制文件..."
     $buildResults.PrepareDist = Invoke-PrepareDistDir
+    Update-BuildProgress -StepName "准备 dist 目录" -Status "完成" -Completed
     
     # 如果 dist 准备失败，则跳过后续步骤
     if ($buildResults.PrepareDist -eq $false) {
@@ -1117,7 +1382,9 @@ function Main {
     } else {
         # 步骤 4: 生成 MSI
         if (-not $SkipMSI) {
+            Update-BuildProgress -StepName "生成 MSI 安装包" -Status "正在生成..."
             $buildResults.GenerateMSI = Invoke-GenerateMSI
+            Update-BuildProgress -StepName "生成 MSI 安装包" -Status "完成" -Completed
         } else {
             Write-Step "跳过 MSI 生成"
             $buildResults.GenerateMSI = $null
@@ -1125,12 +1392,17 @@ function Main {
         
         # 步骤 5: 打包 ZIP
         if (-not $SkipZIP) {
+            Update-BuildProgress -StepName "打包 ZIP 便携版" -Status "正在压缩..."
             $buildResults.GenerateZIP = Invoke-GenerateZIP
+            Update-BuildProgress -StepName "打包 ZIP 便携版" -Status "完成" -Completed
         } else {
             Write-Step "跳过 ZIP 打包"
             $buildResults.GenerateZIP = $null
         }
     }
+    
+    # 关闭进度条
+    Complete-BuildProgress
     
     $endTime = Get-Date
     $duration = $endTime - $startTime
